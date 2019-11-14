@@ -25,7 +25,7 @@ for i in range(part_n):
         left_bottom_part = [left_bottom[0]+i*x_item,left_bottom[1]+j*y_item]; # 切片的左下角坐标
         right_top_part = [left_bottom[0]+(i+1)*x_item,left_bottom[1]+(j+1)*y_item]; # 切片的右上角坐标
 
-        for k in range(40):
+        for k in range(100):
             url = url0 + '&polygon=' + str(left_bottom_part[0]) + ',' + str(left_bottom_part[1]) + '|'+str(right_top_part[0]) + ',' + str(right_top_part[1]) + '&keywords=' + keyword + '&offset=25&page=' + str(k)  + '&output=json&key=' + key;      
             print(url)
             s=quote(url, safe=string.printable)

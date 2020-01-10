@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>边界坐标下载器</title>
+    <meta http-equiv="Content-Type" content="text/html"/>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script type="text/javascript" src="http://api.map.baidu.com/library/CityList/1.5/src/CityList.js"></script>
+    <script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=0KMkuVxUGPpugIheU1qvL8GgmUFxYquu"></script>
+  </head>
+  
+  <body>
+    <div id="allmap" style="width:100%;height:600px;"></div>
+    <div class="layout">
+        <input id="value" value="浙江大学" type="text">
+    　　    <input type="submit" onclick="pd()" value="定位">
+    </div>
+  </body>
+    <script type="text/javascript">
+function downFile(points) {
+  var elementA = document.createElement('a');
+  name=document.getElementById('value').value;
+  elementA.setAttribute('href', 'data:text/plain;charset=utf-8,' + points);
+  elementA.setAttribute('download', +new Date() + ".txt");
+  elementA.style.display = 'none';
+  document.body.appendChild(elementA);
+  elementA.click();
+  document.body.removeChild(elementA);
+}
+
+  </script>
+  <script type="text/javascript">
+      //初始化地图
+      var value='';
+      var map = new BMap.Map("allmap");
+      map.centerAndZoom('杭州市',12);
+      map.enableScrollWheelZoom();
+
+      //定位区域，小地名，使用本地检索方法
+      var dw=function(){
+          var local = new BMap.LocalSearch(map, {
+              renderOptions:{map: map}
+          });
+          local.setMarkersSetCallback(function(pois){
+              console.log(pois);
+              //清除所有覆盖物后，在叠加第一个点
+              map.clearOverlays();
+              for(var i=0;i<pois.length;i++){
+                  var marker = new BMap.Marker(pois[i].point);
+                  map.addOverlay(marker);
+              }
+              //根据获取到的poi id，查询边界坐标集合，画多边形
+              var uid = pois[0].uid;
+              queryUid(uid);
+          })
+          local.search(value);
+          map.clearOverlays();
+          
+      }
+      //获取小区信息
+      function queryUid(uid){
+          $.ajax({  
+                async: false,
+                url:"http://map.baidu.com/?pcevaname=pc4.1&qt=ext&ext_ver=new&l=12&uid="+uid,
+                dataType:'jsonp',  
+                jsonp:'callback',  
+                success:function(result) {  
+                    content = result.content;
+                    if(null!=content.geo && content.geo!=undefined){
+                          var geo = content.geo;
+                          var points = coordinateToPoints(geo);
+                          //point分组，得到多边形的每一个点，画多边形
+                          if (points && points.indexOf(";") >= 0) {
+                              points = points.split(";");
+                          }
+                          var arr=[];
+                          for (var i=0;i<points.length-1;i++){
+                              var temp = points[i].split(",");
+                              arr.push(new BMap.Point(parseFloat(temp[0]),parseFloat(temp[1])));
+                          }
+                          var polygon = new BMap.Polygon(arr, {strokeColor:"blue", strokeWeight:2, strokeOpacity:0.5});  //创建多边形
+                          map.addOverlay(polygon);   //增加多边形
+                    }
+                },
+                timeout:3000
+            }); 
+      }
+      //获取边界
+      function getBoundary(){//获取边界       
+      var bdary = new BMap.Boundary();
+      bdary.get(value, function(rs){       //获取行政区域
+          map.clearOverlays();        //清除地图覆盖物       
+          var count = rs.boundaries.length; //行政区域的点有多少个
+          for(var i = 0; i < count; i++){
+              var ply = new BMap.Polygon(rs.boundaries[i], {
+                  strokeWeight: 1,
+                  strokeColor: "#ff0000"
+              }); //建立多边形覆盖物
+              map.addOverlay(ply);  //添加覆盖物
+              map.setViewport(ply.getPath());    //调整视野         
+              }                
+          });   
+      }   
+      //正则表达式，满足条件后调用
+      var patter=/['省'|'市'|'区'|'县']$/;
+      var pd=function(){
+          value=document.getElementById('value').value;
+          if(patter.test(value)==true){//关键字结尾是省市县区就调用下面方法
+              getBoundary();
+              if(/社区|小区$/.test(value)==true){//因为区后面结尾，会有小区和社区，即做了一个字方法
+                  dw();
+              }
+          }else{//关键字结尾没有省市县区结尾就调用此方法
+              dw();
+          }
+      }
+      
+      //坐标转换
+      function coordinateToPoints(coordinate) { 
+          console.log(coordinate);
+          
+        var points ="";
+        if (coordinate) {
+            var projection = BMAP_NORMAL_MAP.getProjection();
+            
+            if (coordinate && coordinate.indexOf("-") >= 0) {
+                coordinate = coordinate.split('-');
+            }
+            //取点集合
+            var tempco = coordinate[1];
+            if (tempco && tempco.indexOf(",") >= 0) {
+                tempco = tempco.replace(";","").split(",");
+            }
+            //分割点，两个一组，组成百度米制坐标
+            var temppoints=[];
+            for(var i = 0, len = tempco.length; i < len; i++){
+                var obj = new Object(); 
+                obj.lng=tempco[i];
+                obj.lat=tempco[i+1];
+                temppoints.push(obj);
+                i++;
+            }
+            //遍历米制坐标，转换为经纬度
+            for ( var i = 0, len = temppoints.length; i < len; i++) {
+                    //var pos = coordinate[i].split(',');
+                    var pos = temppoints[i];
+                    var point = projection.pointToLngLat(new BMap.Pixel(pos.lng, pos.lat));
+                    points += ([ point.lng, point.lat ].toString() + ";");
+            }
+
+        }
+        console.log("米坐标："+points);
+        downFile(points)
+        return points;
+    }
+
+  </script>
+
+</html>
